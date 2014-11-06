@@ -116,7 +116,7 @@ var AudioPlayer = function(options) {
 				// Store a sum of the channels to average and the actual channel data.
 				for(channel_counter = 0; channel_counter < channel_length; channel_counter++) {
 					cache_sum += buffer_channel[channel_counter][sample_counter];
-					cache_channels[channel_counter] = buffer_channel[channel_counter];
+					cache_channels[channel_counter] = buffer_channel[channel_counter][sample_counter];
 				}
 				cache.push([cache_sum/channel_length, cache_channels]);
 				
@@ -130,21 +130,23 @@ var AudioPlayer = function(options) {
 						cache_count < cache_length;
 						cache_count++
 					) {
-						cache_sum += cache[cache_count][0];
+						cache_sum += Math.abs(cache[cache_count][0]);
 					}
 					
 					// If the current interval meets the requirement, write it to the buffer.
-					if(Math.abs(cache_sum/cache_length) >= 0.00001) {
+					if(Math.abs(cache_sum/cache_length) >= 0.003) {
 						for(
 							cache_count = 0, cache_length = cache.length;
 							cache_count < cache_length;
 							cache_count++
 						) {
-							for(channel_counter = 0; channel_counter < channel_length; channel_counter++) {
-								source_channel[channel_counter][used_sample_counter] = 
-									cache[channel_counter][1][channel_counter];
-							}
-							used_sample_counter++;
+							//if(sample_counter%my.settings.rate === 0) {
+								for(channel_counter = 0; channel_counter < channel_length; channel_counter++) {
+									source_channel[channel_counter][used_sample_counter] = 
+										cache[cache_count][1][channel_counter];
+								}
+								used_sample_counter++;
+							//}
 						}
 					}
 					
@@ -158,13 +160,17 @@ var AudioPlayer = function(options) {
 			for(; channel_counter < channel_length; channel_counter++) {
 				buffer_channel = buffer.getChannelData(channel_counter);
 				source_channel = filtered_buffer.getChannelData(channel_counter);
+				used_sample_counter = 0;
 				
 				for(
 					sample_counter = 0, sample_length = buffer_channel.length;
 					sample_counter < sample_length;
 					sample_counter++
 				) {
-					source_channel[sample_counter] = buffer_channel[sample_counter];
+					//if(sample_counter%my.settings.rate === 0) {
+						source_channel[used_sample_counter] = buffer_channel[sample_counter];
+						used_sample_counter++;
+					//}
 				}
 			}
 		}
@@ -194,6 +200,8 @@ var AudioPlayer = function(options) {
 			}
 		}
 		
+		console.log(filtered_buffer.duration);
+		
 		my.source.buffer = final_buffer;
 		my.source.connect(my.context.destination);
 		
@@ -203,6 +211,7 @@ var AudioPlayer = function(options) {
 	
 	my.play = function() {
 		console.log('Playing ' + my.settings.url);
+		my.playing = true;
 		my.source.start(0);
 	};
 	
@@ -223,6 +232,9 @@ var AudioPlayer = function(options) {
 	// Audio buffer.  Reads and "parses" the audio file.
 	my.buffer = false;
 	
+	// Whether we are playing anything.
+	my.playing = false;
+	
 	// Initialize the settings.
 	my.init(options, defaults);
 	
@@ -240,7 +252,13 @@ document.body.addEventListener(
 			if(p.audio) {
 				p.audio.play();
 			} else {
-				audio = new AudioPlayer({url: p.getAttribute('data-src'), smartSpeed: true});
+				audio = new AudioPlayer(
+					{
+						url: p.getAttribute('data-src'),
+						smartSpeed: false,
+						rate: 2
+					}
+				);
 				p.audio = audio;
 			}
 		}
