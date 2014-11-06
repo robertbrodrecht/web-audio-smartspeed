@@ -76,10 +76,11 @@ var AudioPlayer = function(options) {
 			sample_counter = 0,
 			sample_length = 0,
 			used_sample_counter = 0,
-			last_second = [],
-			last_second_length,
-			last_second_count,
-			last_second_avg;
+			cache = [],
+			cache_channels = [],
+			cache_length,
+			cache_count,
+			cache_sum;
 		
 		console.log('Processing ' + my.settings.url);
 		
@@ -91,64 +92,87 @@ var AudioPlayer = function(options) {
 			buffer.sampleRate
 		);
 		
-		for(; channel_counter < channel_length; channel_counter++) {
-			buffer_channel = buffer.getChannelData(channel_counter);
-			source_channel = filtered_buffer.getChannelData(channel_counter);
+		// If we're using smartspeed, the file needs processing.
+		if(my.settings.smartSpeed === true) {
+			buffer_channel = [];
+			source_channel = [];
+			used_sample_counter = 0;
 			
+			// Get all the channel data out for processing.
+			for(; channel_counter < channel_length; channel_counter++) {
+				buffer_channel[channel_counter] = buffer.getChannelData(channel_counter);
+				source_channel[channel_counter] = filtered_buffer.getChannelData(channel_counter);
+			}
+			
+			// Loop the samples to decide what gets kept.
 			for(
-				sample_counter = 0, sample_length = buffer_channel.length;
+				sample_counter = 0, sample_length = buffer_channel[0].length;
 				sample_counter < sample_length;
 				sample_counter++
 			) {
-				// Keep a cache of the samples.
-				last_second.push(buffer_channel[sample_counter]);
+				cache_sum = 0;
+				cache_channels = [];
 				
-				// When we hit .25s of audio, decide if we want to keep it
-				// by determining if the average of all samples is above
-				// a certain number.
-				if(last_second.length >= buffer.sampleRate / 4) {
+				// Store a sum of the channels to average and the actual channel data.
+				for(channel_counter = 0; channel_counter < channel_length; channel_counter++) {
+					cache_sum += buffer_channel[channel_counter][sample_counter];
+					cache_channels[channel_counter] = buffer_channel[channel_counter];
+				}
+				cache.push([cache_sum/channel_length, cache_channels]);
+				
+				// Process and flush cache every .25s of data (I think).
+				if(cache.length >= buffer.sampleRate / 4) {
 					
-					last_second_avg = 0;
-					
-					// Sum the array for averaging.
+					// Sum the cache for the current interval.
+					cache_sum = 0;
 					for(
-						last_second_count = 0, 
-							last_second_length = last_second.length;
-						last_second_count < last_second_length;
-						last_second_count++
+						cache_count = 0, cache_length = cache.length;
+						cache_count < cache_length;
+						cache_count++
 					) {
-						last_second_avg += last_second[last_second_count];
+						cache_sum += cache[cache_count][0];
 					}
 					
-					// If smartspeed is disabled or the average meets criteria
-					if(
-						my.settings.smartSpeed === false || 
-						Math.abs(last_second_avg/last_second_length) >= 0.00001
-					) {
-						// Loop the cached samples and add them to the source.
+					// If the current interval meets the requirement, write it to the buffer.
+					if(Math.abs(cache_sum/cache_length) >= 0.00001) {
 						for(
-							last_second_count = 0, 
-								last_second_length = last_second.length;
-							last_second_count < last_second_length;
-							last_second_count++
+							cache_count = 0, cache_length = cache.length;
+							cache_count < cache_length;
+							cache_count++
 						) {
-							source_channel[used_sample_counter] = 
-								last_second[last_second_count];
+							for(channel_counter = 0; channel_counter < channel_length; channel_counter++) {
+								source_channel[channel_counter][used_sample_counter] = 
+									cache[channel_counter][1][channel_counter];
+							}
 							used_sample_counter++;
 						}
 					}
 					
-					last_second = [];
+					// Reset the cache.
+					cache = [];
+				}
+			}
+		
+		// If we aren't using smartspeed, just copy everything over to the source buffer.
+		} else {
+			for(; channel_counter < channel_length; channel_counter++) {
+				buffer_channel = buffer.getChannelData(channel_counter);
+				source_channel = filtered_buffer.getChannelData(channel_counter);
+				
+				for(
+					sample_counter = 0, sample_length = buffer_channel.length;
+					sample_counter < sample_length;
+					sample_counter++
+				) {
+					source_channel[sample_counter] = buffer_channel[sample_counter];
 				}
 			}
 		}
 		
-		console.log(used_sample_counter, sample_counter, buffer.sampleRate * buffer.duration);
-		
 		// Create the final buffer so we can copy everything over.
 		final_buffer = my.context.createBuffer(
 			filtered_buffer.numberOfChannels, 
-			used_sample_counter, 
+			filtered_buffer.sampleRate * filtered_buffer.duration, 
 			filtered_buffer.sampleRate
 		);
 		
@@ -160,6 +184,7 @@ var AudioPlayer = function(options) {
 		) {
 			buffer_channel = filtered_buffer.getChannelData(channel_counter);
 			source_channel = final_buffer.getChannelData(channel_counter);
+			
 			for(
 				sample_counter = 0, sample_length = buffer_channel.length;
 				sample_counter < sample_length;
