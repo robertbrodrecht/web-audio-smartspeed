@@ -255,7 +255,7 @@ document.body.addEventListener(
 				audio = new AudioPlayer(
 					{
 						url: p.getAttribute('data-src'),
-						smartSpeed: false,
+						smartSpeed: true,
 						rate: 2
 					}
 				);
