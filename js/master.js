@@ -1,13 +1,5 @@
 /*jslint browser: true, devel: true, sloppy: true, todo: true, white: true */
 
-// talkshow-001.mp3
-// talkshow-089.mp3
-
-// buildanalyze-105.mp3
-// hypercritical-086.mp3
-
-// debug11b.mp3
-
 var AudioPlayer = function(options) {
 	
 	var my = this,
