@@ -1,4 +1,5 @@
 /*jslint browser: true, devel: true, sloppy: true, todo: true, white: true */
+
 var AudioPlayer = function(options) {
 	
 	var my = this,
